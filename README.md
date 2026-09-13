@@ -73,7 +73,7 @@ clinical-ai-patient-journey/
 ├── app/
 │   └── prototype.py          # main pipeline
 ├── data/
-│   └── synthetic_cases.csv   # 20 synthetic test cases, no real patient data
+│   └── synthetic_cases.csv   # 26 synthetic test cases, no real patient data
 ├── evaluation/
 │   └── evaluation_results.csv # output of running prototype.py
 ├── docs/
