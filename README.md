@@ -41,7 +41,7 @@ Patient note (text)
       |        --> applies recency thresholds + path logic
       v
 [3] Escalation check
-      |        --> ALWAYS overrides steps 1-2 if triggered
+      |        --> overrides steps 1-2 when a symptom/contradiction is detected
       v
 [4] Output: recommended pathway + confidence + escalation flag + reasoning
 ```
