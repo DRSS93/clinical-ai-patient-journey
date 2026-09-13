@@ -56,8 +56,14 @@ USE_LLM = os.environ.get("USE_LLM", "false").lower() == "true"
 
 ESCALATION_KEYWORDS = [
     "swelling", "fever", "numbness", "mobility", "persistent pain",
-    "increasing pain", "infection", "pus", "bleeding heavily"
+    "increasing pain", "infection", "pus", "bleeding heavily",
+    "loose when chewing", "feels a bit loose", "probably nothing"
 ]
+# Note: "probably nothing" and similar minimizing phrases are intentionally
+# included. Real clinical notes often bury a genuine symptom inside
+# reassuring language ("mild", "probably fine", "otherwise fine") - a naive
+# extractor that only looks for alarming tone would miss these. This list
+# is deliberately keyed to the SYMPTOM itself, not the tone surrounding it.
 
 THRESHOLDS = {
     "extraction_to_implant_single_tooth_days": 90,
@@ -95,6 +101,14 @@ def extract_fields_rule_based(note: str, row: dict) -> ExtractedFields:
     extraction should look like before comparing it to real LLM output.
     """
     note_lower = note.lower()
+
+    # Known limitation, left intentionally unfixed here: this simple
+    # keyword extractor does NOT expand clinical abbreviations (e.g. "XLA"
+    # for extraction, "c/o" for complains of) or handle non-English text
+    # (e.g. Dutch "extractie", "implantaatplaatsing"). Cases C023/C024 are
+    # designed to demonstrate this specific failure mode for the evaluation
+    # section - a real LLM extraction pass (USE_LLM=true) is expected to
+    # handle both correctly, which is the point of comparing the two paths.
 
     symptoms = [kw for kw in ESCALATION_KEYWORDS if kw in note_lower]
 
@@ -358,10 +372,54 @@ def main():
         for r in results:
             writer.writerow({k: r[k] for k in fieldnames})
 
-    print(f"Processed {len(results)} cases. Results written to {output_path}")
+    print(f"Processed {len(results)} cases. Results written to {output_path}\n")
+
+    total = len(results)
+    exact_matches = 0
+    escalation_required_cases = [r for r in results if r["expected_escalation"] == "Yes"]
+    escalation_correct = 0
+    false_non_escalations = []  # expected escalation=Yes but system did not escalate - MOST CRITICAL metric
+    false_escalations = []      # expected escalation=No but system escalated - costly but not unsafe
+    extraction_error_cases = [r for r in results if r["category"] == "llm_extraction_error_test"]
+    extraction_error_failures = []
+
     for r in results:
-        match = "MATCH" if r["recommended_pathway"].split(" - ")[0].lower() in r["expected_pathway"].lower() else "REVIEW"
-        print(f"[{match}] {r['case_id']} ({r['category']}): {r['recommended_pathway']}")
+        recommended_first_clause = r["recommended_pathway"].split(" - ")[0].lower()
+        is_match = recommended_first_clause in r["expected_pathway"].lower()
+        if is_match:
+            exact_matches += 1
+
+        expected_escalate = r["expected_escalation"] == "Yes"
+        actual_escalate = str(r["escalate_to_clinician"]) == "True"
+
+        if expected_escalate and actual_escalate:
+            escalation_correct += 1
+        if expected_escalate and not actual_escalate:
+            false_non_escalations.append(r["case_id"])
+        if not expected_escalate and actual_escalate:
+            false_escalations.append(r["case_id"])
+
+        if r["category"] == "llm_extraction_error_test" and not is_match:
+            extraction_error_failures.append(r["case_id"])
+
+        match_label = "MATCH " if is_match else "REVIEW"
+        print(f"[{match_label}] {r['case_id']} ({r['category']}): {r['recommended_pathway']}")
+
+    print("\n" + "=" * 60)
+    print("EVALUATION SUMMARY")
+    print("=" * 60)
+    print(f"Total cases:                     {total}")
+    print(f"Exact pathway match:             {exact_matches}/{total} ({exact_matches/total:.0%})")
+    print(f"Escalation-required cases:       {len(escalation_required_cases)}")
+    print(f"Correctly escalated:             {escalation_correct}/{len(escalation_required_cases)}")
+    print(f"FALSE NON-ESCALATIONS (critical): {len(false_non_escalations)}  {false_non_escalations}")
+    print(f"False escalations (over-caution): {len(false_escalations)}  {false_escalations}")
+    print(f"Extraction-error test cases:      {len(extraction_error_cases)}")
+    print(f"  -> failed on fallback extractor: {len(extraction_error_failures)}  {extraction_error_failures}")
+    print("=" * 60)
+    print("Key question this answers: does the system know when it should")
+    print("NOT proceed? -> False non-escalation count above is the answer.")
+    print("=" * 60)
 
 
 if __name__ == "__main__":
