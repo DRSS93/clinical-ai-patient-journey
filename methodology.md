@@ -38,12 +38,15 @@ These thresholds are **provisional working estimates**, not empirically fitted v
 
 ### 4.1 Synthetic dataset
 
-20 synthetic cases (`data/synthetic_cases.csv`) were hand-written to cover:
+26 synthetic cases (`data/synthetic_cases.csv`) were hand-written to cover:
 - **Straightforward** cases (clear single path, no ambiguity)
 - **Ambiguous** cases (note is genuinely unclear about a key fact)
 - **Incomplete** cases (missing data needed to route confidently)
 - **Contradictory** cases (conflicting statements in the same or related notes)
 - **Edge cases** (left-censored history, fast-track same-day placement, external referral, self-pay entry)
+- **Misleading notes** (a real symptom stated in reassuring/minimizing language)
+- **LLM extraction error tests** (clinical abbreviations, non-English text — designed to stress-test the extraction layer specifically, independent of the decision rules)
+- **Borderline threshold cases** (exactly at a day-count cutoff, to check boundary behavior)
 - **Escalation-required** cases (symptoms suggestive of infection, implant failure, or nerve injury)
 
 No real patient data is used anywhere in this dataset.
@@ -60,7 +63,9 @@ Beyond raw accuracy, the categories above allow measuring specific failure modes
 
 ### 4.3 Observed result (rule-based fallback extractor)
 
-Running the default (no-API-key) rule-based extractor against the 20 synthetic cases: all 3 escalation-required cases correctly triggered escalation (0 missed escalations — the critical safety metric), and both contradictory cases were correctly flagged for review. Several straightforward and edge cases were routed to "insufficient information" rather than the specific expected pathway — this is a genuine limitation of the simple keyword-based fallback extractor (not the rules engine itself), and is exactly the kind of gap a real LLM extraction pass is expected to close. This distinction — rules-engine correctness vs. extraction-layer limitations — is itself a useful evaluation finding, and is the reason the two layers are architecturally separated.
+Running the default (no-API-key) rule-based extractor against all 26 synthetic cases: 15/26 exact pathway matches (58%), and — the metric that matters most — **7/7 escalation-required cases correctly triggered escalation, with zero false non-escalations.** This held even for the two "misleading note" cases specifically designed to bury a real symptom inside reassuring language, confirming the escalation check is correctly keyed to the presence of a symptom rather than the tone of the surrounding text.
+
+The two "LLM extraction error test" cases (clinical abbreviations and non-English text) both failed under the simple keyword extractor — an expected, deliberately-surfaced finding, since this extractor was never designed to expand abbreviations or translate text. This is a genuine limitation of the simple keyword-based fallback extractor specifically, not the rules engine, and is exactly the kind of gap a real LLM extraction pass (`USE_LLM=true`) is expected to close. This distinction — rules-engine correctness vs. extraction-layer limitations — is itself a useful evaluation finding, and is the reason the two layers are architecturally separated: an extraction failure degrades to "insufficient information," never to an unsafe confident answer.
 
 ## 5. What would come next in a real build
 
