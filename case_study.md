@@ -1,8 +1,14 @@
-# Case Study: AI-Assisted Clinical Workflow Decision Support for Dental Implant Patient Journeys
+# Case Study: Designing Safer LLM-Based Clinical Workflow Decision Support
+
+## The question
+
+**How should an LLM be used inside a safety-critical clinical workflow — and how do you evaluate whether it's being used safely?**
+
+This is not a project about whether AI can help dental implant patients specifically. The dental implant patient journey is the concrete test case used to explore a more general question about safe AI system design in healthcare: keep the LLM's role narrow (interpreting unstructured language) and keep every consequential decision in transparent, testable, human-auditable logic — then evaluate the system specifically on whether it knows when *not* to proceed, not just whether its recommendations look reasonable.
 
 ## Summary
 
-This project explores how an AI language model can be safely integrated into a healthcare workflow — not as a decision-maker, but as an interpreter of unstructured clinical notes, feeding into a transparent, rule-based system that a human clinician ultimately reviews. It was built as a small working prototype, evaluated against a deliberately constructed set of test cases, and documented with the same rigor as the underlying clinical/data reasoning it draws from.
+This project explores how an AI language model can be safely integrated into a healthcare workflow — not as a decision-maker, but as an interpreter of unstructured clinical notes, feeding into a transparent, rule-based system that a human clinician ultimately reviews. It was built as a small working prototype, evaluated against a deliberately constructed set of adversarial test cases, and documented with the same rigor as the underlying clinical/data reasoning it draws from.
 
 ---
 
@@ -46,23 +52,38 @@ The time-based thresholds used in the rules layer (e.g., how long to wait before
 
 Rather than just building something that looks impressive in a demo, the project treats evaluation as the central piece of work.
 
-**Method:** 20 synthetic (entirely made-up, no real patient data) case notes were written to deliberately cover:
+**Method:** 26 synthetic (entirely made-up, no real patient data) case notes were written to deliberately cover:
 - Straightforward cases
 - Ambiguous cases (a genuinely unclear fact)
 - Incomplete cases (missing information)
 - Contradictory cases (conflicting statements)
 - Edge cases (fast-track same-day treatment, external referrals, self-pay patients, incomplete history)
+- **Misleading notes** (a genuine symptom stated in reassuring, minimizing language — e.g., "probably nothing")
+- **LLM extraction error tests** (clinical abbreviations, non-English input — designed to test the limits of the extraction layer specifically)
+- **Borderline threshold cases** (exactly at a day-count cutoff)
 - Escalation-required cases (symptoms suggesting a possible complication)
 
 Each case has a hand-written "expected outcome" — what a human reviewer would want the system to conclude. The system's actual output is then compared against that expectation.
 
-**What's measured**, beyond simple right/wrong:
-- **Escalation sensitivity** — did every symptom-flagged case correctly stop and escalate? (The single most important safety metric.)
-- **False reassurance** — did the system ever sound confident about a case that was actually ambiguous or risky?
-- **Appropriate caution** — did unclear cases correctly resolve to "needs more information" rather than a guess?
-- **Consistency** — do similar cases get treated the same way?
+**The central evaluation question:** not "is the pathway recommendation correct," but **"does the system know when it should not proceed?"** — a system that is occasionally wrong about a routine case is a usability problem; a system that is confidently wrong about a risky case is a safety problem. The evaluation is designed to separate these two failure types explicitly.
 
-**Result:** Using the simplest possible extraction method (keyword matching, no AI model called at all), the system correctly escalated all 3 symptom-flagged cases and correctly flagged both contradictory cases — zero missed escalations, which is the metric that matters most from a safety standpoint. Several straightforward cases were routed to "insufficient information" rather than their specific expected pathway, which is a known limitation of the simple keyword extractor, not the decision rules themselves — and points directly to where a real AI-based extraction step should improve results next.
+**What's measured**, beyond simple right/wrong:
+- **False non-escalation** — a real symptom or contradiction present, but the system did not flag it. This is the single most important number in the entire evaluation.
+- **False escalation** — the system escalated something that didn't need it. Costly (adds clinician workload) but not unsafe.
+- **Extraction-layer failure rate** — errors specifically attributable to the text-interpretation step (abbreviations, language), isolated from the decision-rules layer.
+- **Appropriate caution** — did unclear cases correctly resolve to "needs more information" rather than a guess?
+
+**Result (rule-based fallback extractor, no AI model called — zero cost):**
+
+| Metric | Result |
+|---|---|
+| Exact pathway match | 15/26 (58%) |
+| Escalation-required cases correctly escalated | 7/7 (100%) |
+| **False non-escalations** | **0** |
+| False escalations | 1 |
+| Extraction-error test cases failed | 2/2 |
+
+Zero false non-escalations, including on the two "misleading note" cases specifically designed to bury a real symptom inside reassuring language — the system escalated correctly even when the overall tone of the note sounded fine. The two extraction-error failures are a specific, isolated, and expected finding: the simple keyword extractor cannot expand clinical abbreviations or handle non-English text. That is a property of the extraction method used for this test run, not of the decision-rules engine — and is precisely the gap a real LLM-based extraction pass is designed to close.
 
 ## 4. Safety approach
 
@@ -84,9 +105,13 @@ Each case has a hand-written "expected outcome" — what a human reviewer would 
 
 Not "an AI that makes clinical decisions" — instead, a worked example of how to build an AI-assisted tool for a healthcare workflow so that the AI's role stays narrow and bounded, the decision logic stays transparent and testable, safety-critical escalation can't be silently skipped, and the whole system is judged against explicit, named success and failure criteria rather than how convincing the demo looks.
 
-## 7. Next steps
+## 7. Next steps for this prototype
 
-- Run the same 20 cases through the real AI-extraction path and compare results directly against the keyword-based baseline above.
+- Run the same 26 cases through the real AI-extraction path and compare results directly against the keyword-based baseline above.
 - Expand to 50-100 synthetic cases with deliberately engineered coverage gaps.
 - Validate the time thresholds against real (properly governed, anonymized) patient timing data before treating them as final.
 - Add a second independent clinical reviewer to the expected-outcome labels, and measure agreement between reviewers.
+
+## 8. What would be required before any real-world use
+
+This prototype is several steps removed from anything usable on real patients. A credible path forward would require: a larger, properly consented clinical dataset; multi-clinician adjudication of expected outcomes (not one person's judgment); prospective validation on new cases rather than retrospective synthetic ones; formal adversarial safety testing well beyond 26 cases; ongoing model/version monitoring; privacy and security controls appropriate to real patient data; a genuine, workflow-integrated human override mechanism; a regulatory classification and approval assessment; and continued monitoring for failure modes no synthetic test set can fully anticipate. Naming this gap explicitly is itself part of the point of the project — a credible healthcare AI prototype should be as clear about what it hasn't yet proven as about what it has.
