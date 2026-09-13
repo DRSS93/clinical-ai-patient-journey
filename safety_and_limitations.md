@@ -18,6 +18,22 @@ Nothing in this repository should be used to make an actual clinical or treatmen
 4. **Every output includes a plain-language reasoning string.** No output is a bare label — the system always states which fields drove the recommendation, so a human reviewer can quickly sanity-check it.
 5. **Confidence labeling.** Every output carries a low/medium/high confidence tag tied to how much the extraction layer had to infer versus directly observe.
 
+## What would be needed before any real (non-synthetic) use
+
+This prototype is several steps away from anything usable on real patients. A real path to that would require, at minimum:
+
+1. **A larger, real clinical dataset** — properly consented and governed, not synthetic
+2. **Clinician adjudication** — multiple clinicians independently reviewing and agreeing on expected outcomes, not one person's judgment (as in this prototype)
+3. **Prospective validation** — testing on new, forward-looking cases the system hasn't been tuned against, not just retrospective synthetic cases
+4. **Formal safety testing** — systematic adversarial and edge-case testing well beyond the 26 cases here
+5. **Model and version monitoring** — tracking performance over time as the underlying LLM version changes, since model updates can change behavior
+6. **Privacy and security controls** — encryption, access control, and audit logging appropriate to real patient data (e.g., GDPR compliance in an EU/Netherlands context)
+7. **A genuine human override mechanism** — not just an escalation flag in a demo script, but an integrated workflow a clinician actually uses day to day
+8. **Regulatory assessment** — determining whether and how this would be classified as a medical device / clinical decision support tool under applicable regulation, and what approval pathway that requires
+9. **Ongoing monitoring for unexpected failure modes** — real deployments surface failure patterns no synthetic test set can fully anticipate
+
+This list is intentionally included here rather than left implicit — a credible healthcare AI prototype should be explicit about the distance between "working demo" and "safe to use," not just the demo's own claimed capabilities.
+
 ## Known limitations (honest list)
 
 - **Thresholds are provisional, not empirically validated.** The 90/360/450-day windows are reasoned estimates based on plausible clinical/administrative timelines, not fitted to a real, verified conversion-lag distribution. See `docs/methodology.md` section 3.
